@@ -1,0 +1,571 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f7f7f4" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#14161a" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Список — общие покупки</title>
+<style>
+:root{
+  --paper:#f7f7f4; --card:#ffffff; --ink:#16181d; --muted:#82868f;
+  --line:#e3e3dc; --dot:#c9c9c0;
+  --fresh:#1f7a4c; --fresh-soft:#e8f3ec;
+  --alert:#b3402c;
+  --mono:"Roboto Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --safe-b:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root{ --paper:#14161a; --card:#1c1f25; --ink:#eceef2; --muted:#8b909a;
+         --line:#2a2e36; --dot:#3a3f49; --fresh:#4cc38a; --fresh-soft:#17301f; --alert:#e2705a; }
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%}
+body{
+  background:var(--paper); color:var(--ink); font-family:var(--sans);
+  font-size:17px; line-height:1.35;
+  display:flex; flex-direction:column; overflow:hidden;
+}
+button,input{font:inherit;color:inherit}
+button{background:none;border:0;padding:0;cursor:pointer}
+.lbl{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);font-family:var(--mono)}
+
+/* ---------- шапка ---------- */
+header{
+  padding:calc(env(safe-area-inset-top,0px) + 10px) 14px 10px;
+  border-bottom:1px solid var(--line); background:var(--card);
+  display:flex; align-items:center; gap:12px; flex:none;
+}
+.ticket{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}
+.ticket b{font-family:var(--mono);font-size:19px;letter-spacing:.08em;font-weight:500}
+.hbtn{width:42px;height:42px;border:1px solid var(--line);border-radius:12px;display:grid;place-items:center;flex:none}
+.hbtn:active{background:var(--paper)}
+.hbtn svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.live{display:flex;align-items:center;gap:6px}
+.pulse{width:8px;height:8px;border-radius:50%;background:var(--muted);flex:none}
+.pulse.on{background:var(--fresh);box-shadow:0 0 0 0 rgba(31,122,76,.5);animation:p 2.4s infinite}
+.pulse.bad{background:var(--alert)}
+@keyframes p{70%{box-shadow:0 0 0 7px rgba(31,122,76,0)}100%{box-shadow:0 0 0 0 rgba(31,122,76,0)}}
+
+/* ---------- список ---------- */
+main{flex:1;overflow-y:auto;overscroll-behavior:contain;padding:6px 0 8px}
+.row{display:flex;align-items:center;gap:10px;padding:9px 14px;position:relative}
+.row+.row::before{content:"";position:absolute;left:58px;right:14px;top:0;border-top:1px solid var(--line)}
+.body{flex:1;min-width:0}
+.meta{display:flex;align-items:center;gap:3px;margin-top:4px}
+.step{width:27px;height:27px;flex:none;border:1px solid var(--line);border-radius:8px;color:var(--muted);
+  font-family:var(--mono);font-size:16px;line-height:1;display:grid;place-items:center}
+.step:active{background:var(--paper);color:var(--ink)}
+.qty{width:46px;flex:none;text-align:center;font-family:var(--mono);font-size:14px;border:0;background:none;
+  padding:3px 0;outline:none;border-bottom:1px solid transparent}
+.qty:focus{border-bottom-color:var(--fresh)}
+.unit{height:27px;flex:none;padding:0 9px;margin-left:3px;border:1px solid var(--line);border-radius:8px;
+  font-family:var(--mono);font-size:12px;letter-spacing:.06em;color:var(--muted)}
+.unit:active{background:var(--paper)}
+.money{display:flex;flex-direction:column;align-items:flex-end;flex:none;gap:2px}
+.pricewrap{display:flex;align-items:baseline;gap:3px}
+.linesum{font-family:var(--mono);font-size:12px;color:var(--muted);min-height:15px}
+.tick{width:30px;height:30px;flex:none;border:1.6px solid var(--dot);border-radius:9px;display:grid;place-items:center}
+.tick svg{width:18px;height:18px;stroke:#fff;fill:none;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;
+  stroke-dasharray:24;stroke-dashoffset:24;transition:stroke-dashoffset .18s ease}
+.row.done .tick{background:var(--fresh);border-color:var(--fresh)}
+.row.done .tick svg{stroke-dashoffset:0}
+.name{flex:1;min-width:0;border:0;background:none;padding:4px 0;outline:none}
+.row.done .name{color:var(--muted);text-decoration:line-through;text-decoration-thickness:1px}
+.leader{flex:none;width:14px;border-bottom:2px dotted var(--dot);align-self:center;margin-bottom:14px}
+.price{width:70px;flex:none;text-align:right;font-family:var(--mono);font-size:16px;border:0;background:none;
+  padding:6px 2px;outline:none;border-bottom:1px solid transparent}
+.price:focus{border-bottom-color:var(--fresh)}
+.price::placeholder{color:var(--dot)}
+.cur{font-family:var(--mono);font-size:14px;color:var(--muted);flex:none;width:14px}
+.del{width:26px;height:30px;flex:none;display:grid;place-items:center;color:var(--muted);opacity:0;align-self:flex-start}
+.row:focus-within .del{opacity:1}
+.del svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round}
+.sep{display:flex;align-items:center;gap:10px;padding:18px 14px 8px}
+.sep::after{content:"";flex:1;border-top:1px dashed var(--line)}
+.empty{padding:64px 32px;text-align:center;color:var(--muted)}
+.empty b{display:block;color:var(--ink);font-size:19px;margin-bottom:6px;font-weight:600}
+
+/* ---------- низ: чек + добавление ---------- */
+footer{flex:none;background:var(--card);position:relative;padding-bottom:var(--safe-b)}
+footer::before{ /* оторванный край чека */
+  content:"";position:absolute;top:-9px;left:0;right:0;height:9px;background:var(--card);
+  -webkit-mask:repeating-linear-gradient(135deg,#000 0 7px,transparent 7px 14px);
+  mask:repeating-linear-gradient(135deg,#000 0 7px,transparent 7px 14px);
+}
+.total{display:flex;align-items:flex-end;gap:10px;padding:14px 14px 10px}
+.total .sum{margin-left:auto;font-family:var(--mono);font-size:30px;font-weight:500;letter-spacing:-.01em}
+.total .sum .sign{font-size:17px;color:var(--muted)}
+.add{display:flex;gap:8px;padding:0 14px 12px;align-items:center}
+.add input{flex:1;height:50px;border:1px solid var(--line);border-radius:14px;background:var(--paper);
+  padding:0 14px;outline:none}
+.add input:focus{border-color:var(--fresh)}
+.add button{width:50px;height:50px;border-radius:14px;background:var(--ink);color:var(--paper);
+  display:grid;place-items:center;flex:none}
+.add button svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round}
+
+/* ---------- панель ---------- */
+.sheet{position:fixed;inset:0;background:rgba(0,0,0,.4);display:none;z-index:9;
+  align-items:flex-end;backdrop-filter:blur(2px)}
+.sheet.open{display:flex}
+.sheet .box{background:var(--card);width:100%;border-radius:20px 20px 0 0;padding:20px 18px calc(20px + var(--safe-b));
+  max-height:88vh;overflow-y:auto;animation:up .22s ease}
+@keyframes up{from{transform:translateY(18px);opacity:.6}}
+.grip{width:38px;height:4px;border-radius:2px;background:var(--line);margin:-6px auto 16px}
+.sheet h2{font-size:15px;margin:22px 0 8px;font-weight:600}
+.sheet h2:first-of-type{margin-top:8px}
+.sheet p{color:var(--muted);font-size:14px;margin:6px 0}
+.code{font-family:var(--mono);font-size:24px;letter-spacing:.1em;padding:12px;border:1px dashed var(--line);
+  border-radius:12px;text-align:center;margin:8px 0}
+.act{width:100%;height:50px;border-radius:14px;border:1px solid var(--line);margin-top:8px;font-weight:500}
+.act.solid{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.act.warn{color:var(--alert)}
+.field{display:flex;gap:8px;margin-top:8px}
+.field input,.field select{flex:1;height:50px;border:1px solid var(--line);border-radius:14px;background:var(--paper);padding:0 12px;outline:none}
+.field input.cur-in{flex:none;width:80px;text-align:center}
+.toast{position:fixed;left:50%;bottom:calc(96px + var(--safe-b));transform:translate(-50%,10px);background:var(--ink);
+  color:var(--paper);padding:10px 16px;border-radius:99px;font-size:14px;opacity:0;pointer-events:none;
+  transition:.2s;z-index:20}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<header>
+  <button class="hbtn" id="menu" aria-label="Настройки списка">
+    <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+  </button>
+  <div class="ticket">
+    <div class="lbl">Список</div>
+    <b id="codeLabel">------</b>
+  </div>
+  <div class="live">
+    <i class="pulse" id="pulse"></i>
+    <span class="lbl" id="peers">0</span>
+  </div>
+  <button class="hbtn" id="share" aria-label="Поделиться списком">
+    <svg viewBox="0 0 24 24"><path d="M12 15V3m0 0L8 7m4-4 4 4"/><path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>
+  </button>
+</header>
+
+<main id="main">
+  <div id="list"></div>
+  <div class="empty" id="empty">
+    <b>Список пуст</b>
+    Добавьте первую покупку внизу — можно сразу с количеством: «яйца 10» или «сыр 0,5 кг». Потом нажмите «Поделиться», и второй человек откроет тот же список.
+  </div>
+</main>
+
+<footer>
+  <div class="total">
+    <div>
+      <div class="lbl">Собрано</div>
+      <div id="progress" style="font-family:var(--mono);font-size:15px">0 / 0</div>
+    </div>
+    <div class="sum"><span class="sign" id="curSign">€</span> <span id="sum">0,00</span></div>
+  </div>
+  <div class="add">
+    <input id="newItem" placeholder="Что купить? Можно «сыр 0,5 кг»" enterkeyhint="done" autocomplete="off">
+    <button id="addBtn" aria-label="Добавить в список">
+      <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+    </button>
+  </div>
+</footer>
+
+<div class="sheet" id="sheet">
+  <div class="box">
+    <div class="grip"></div>
+    <h2>Код списка</h2>
+    <p>Кто знает код — видит и меняет список. Кода нет ни у кого, кроме тех, кому вы его дали.</p>
+    <div class="code" id="codeBig">------</div>
+    <button class="act solid" id="shareBtn">Поделиться ссылкой</button>
+    <button class="act" id="copyBtn">Скопировать код</button>
+
+    <h2>Открыть другой список</h2>
+    <div class="field">
+      <input id="joinCode" placeholder="Код от друга" autocapitalize="characters" autocomplete="off">
+      <button class="act" style="width:110px;margin:0" id="joinBtn">Открыть</button>
+    </div>
+    <button class="act" id="newBtn">Создать новый список</button>
+
+    <h2>Как считается сумма</h2>
+    <p>Цена вводится за одну единицу — за штуку, за килограмм, за литр. В итог идёт цена × количество по всем отмеченным позициям.</p>
+
+    <h2>Валюта</h2>
+    <div class="field">
+      <input class="cur-in" id="curInput" maxlength="3" placeholder="€">
+      <div style="flex:1;display:flex;align-items:center;color:var(--muted);font-size:14px">Знак рядом с суммой</div>
+    </div>
+
+    <h2>Сервер синхронизации</h2>
+    <div class="field">
+      <select id="broker">
+        <option value="wss://broker.hivemq.com:8884/mqtt">HiveMQ (по умолчанию)</option>
+        <option value="wss://broker.emqx.io:8084/mqtt">EMQX (запасной)</option>
+        <option value="wss://test.mosquitto.org:8081/mqtt">Mosquitto (запасной)</option>
+      </select>
+    </div>
+    <p>Бесплатные публичные серверы. Содержимое списка шифруется на телефоне — сервер видит только набор байтов.</p>
+
+    <h2>Уборка</h2>
+    <button class="act" id="clearDone">Убрать собранные позиции</button>
+    <button class="act warn" id="clearAll">Очистить весь список</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js" onerror="var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js';s.onload=boot;document.head.appendChild(s)"></script>
+<script>
+/* ============ утилиты ============ */
+var AL = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+function rnd(n){ var a = new Uint8Array(n); crypto.getRandomValues(a);
+  return [].map.call(a, function(b){ return AL[b % AL.length]; }).join(""); }
+function $(s){ return document.querySelector(s); }
+function now(){ return Date.now(); }
+var toastT;
+function toast(msg){ var t=$("#toast"); t.textContent=msg; t.classList.add("show");
+  clearTimeout(toastT); toastT=setTimeout(function(){ t.classList.remove("show"); },1900); }
+
+/* ============ состояние ============ */
+var CODE = "", TOPIC = "", KEY = null, client = null, me = rnd(6).toLowerCase();
+var state = { items:{} };
+var peers = {};
+var CUR = localStorage.getItem("sl:cur") || "€";
+var BROKER = localStorage.getItem("sl:broker") || "wss://broker.hivemq.com:8884/mqtt";
+
+function storeKey(){ return "sl:" + CODE; }
+function save(){ try{ localStorage.setItem(storeKey(), JSON.stringify(state)); }catch(e){} }
+function load(){
+  try{ state = JSON.parse(localStorage.getItem(storeKey())) || {items:{}}; }catch(e){ state={items:{}}; }
+  if(!state.items) state.items={};
+  var cut = now() - 7*864e5;
+  for(var id in state.items){
+    var it = state.items[id];
+    if(!it.ts) it.ts = {};
+    if(it.del && (it.ts.del||0) < cut){ delete state.items[id]; continue; }
+    if(it.qty  == null){ it.qty  = 1;    it.ts.qty  = it.ts.qty  || 0; }   /* метка 0 — правка соседа победит */
+    if(it.unit == null){ it.unit = "шт"; it.ts.unit = it.ts.unit || 0; }
+  }
+}
+
+/* поле = значение + своя метка времени; при слиянии побеждает более свежая правка */
+function stamp(it, f){ it.ts[f] = Math.max(now(), (it.ts[f]||0) + 1); }
+function mergeItem(a, b){
+  if(!a) return b; if(!b) return a;
+  var m = { id:a.id, created: Math.min(a.created||0, b.created||0), ts:{} };
+  ["name","done","price","qty","unit","del"].forEach(function(f){
+    var ta = (a.ts&&a.ts[f])||0, tb = (b.ts&&b.ts[f])||0, useB;
+    if(tb !== ta) useB = tb > ta;
+    else useB = String(b[f]) > String(a[f]);      /* при равных метках — детерминированный выбор */
+    m[f] = useB ? b[f] : a[f];
+    m.ts[f] = useB ? tb : ta;
+  });
+  return m;
+}
+function ser(it){                                   /* канонический вид — чтобы сравнивать по смыслу */
+  if(!it) return "";
+  var t = it.ts || {};
+  return JSON.stringify([it.id, it.created||0, it.name||"", !!it.done, String(it.price||""),
+                         Number(it.qty||1), String(it.unit||"шт"), !!it.del,
+                         t.name||0, t.done||0, t.price||0, t.qty||0, t.unit||0, t.del||0]);
+}
+function mergeState(incoming){
+  var changed = false, weHaveMore = false;
+  for(var id in incoming.items){
+    var inc = incoming.items[id];
+    if(!inc || typeof inc !== "object") continue;
+    if(!inc.ts) inc.ts = {};
+    inc.id = id;
+    var mine = state.items[id], m = mergeItem(mine, inc);
+    if(ser(m) !== ser(mine)){ state.items[id] = m; changed = true; }
+    if(ser(m) !== ser(inc)) weHaveMore = true;
+  }
+  for(var id2 in state.items){ if(!incoming.items[id2]) weHaveMore = true; }
+  if(changed){ save(); render(); }
+  if(weHaveMore) queueSend();
+  return changed;
+}
+
+/* ============ шифрование (ключ = код списка, сервер видит только шифртекст) ============ */
+var subtle = (window.crypto && crypto.subtle) ? crypto.subtle : null;
+function bytes(s){ return new TextEncoder().encode(s); }
+async function deriveKey(code){
+  if(!subtle) return null;
+  var base = await subtle.importKey("raw", bytes(code), "PBKDF2", false, ["deriveKey"]);
+  return subtle.deriveKey({name:"PBKDF2", salt:bytes("shoplist-v1"), iterations:120000, hash:"SHA-256"},
+                          base, {name:"AES-GCM", length:256}, false, ["encrypt","decrypt"]);
+}
+async function topicFor(code){
+  if(!subtle) return "shoplist-plain/" + code;
+  var h = await subtle.digest("SHA-256", bytes("topic|" + code));
+  return "shoplist/" + [].slice.call(new Uint8Array(h), 0, 12)
+    .map(function(b){ return ("0"+b.toString(16)).slice(-2); }).join("");
+}
+async function seal(text){
+  if(!KEY) return bytes(text);
+  var iv = crypto.getRandomValues(new Uint8Array(12));
+  var ct = await subtle.encrypt({name:"AES-GCM", iv:iv}, KEY, bytes(text));
+  var out = new Uint8Array(12 + ct.byteLength);
+  out.set(iv, 0); out.set(new Uint8Array(ct), 12);
+  return out;
+}
+async function open_(buf){
+  var u8 = new Uint8Array(buf);
+  if(!KEY) return new TextDecoder().decode(u8);
+  var pt = await subtle.decrypt({name:"AES-GCM", iv:u8.slice(0,12)}, KEY, u8.slice(12));
+  return new TextDecoder().decode(pt);
+}
+
+/* ============ связь ============ */
+var sendT = null;
+function queueSend(){ clearTimeout(sendT); sendT = setTimeout(send, 250); }
+async function send(){
+  if(!client || !client.connected) return;
+  try{
+    var p = await seal(JSON.stringify({ v:1, items: state.items }));
+    client.publish(TOPIC + "/s", p, { retain:true, qos:0 });
+  }catch(e){}
+}
+function setPulse(cls){ var p=$("#pulse"); p.className = "pulse" + (cls?" "+cls:""); }
+
+function connect(){
+  if(client){ try{ client.end(true); }catch(e){} client = null; }
+  setPulse("");
+  client = mqtt.connect(BROKER, { clientId:"sl_"+me+"_"+rnd(4).toLowerCase(),
+    clean:true, keepalive:30, reconnectPeriod:3000, connectTimeout:8000 });
+
+  client.on("connect", function(){
+    setPulse("on");
+    client.subscribe([TOPIC+"/s", TOPIC+"/p"], {qos:0});
+    setTimeout(function(){ if(Object.keys(state.items).length) send(); }, 800);
+    ping();
+  });
+  client.on("reconnect", function(){ setPulse(""); });
+  client.on("close",    function(){ setPulse(""); });
+  client.on("error",    function(){ setPulse("bad"); });
+  client.on("message", async function(topic, payload){
+    if(topic === TOPIC + "/p"){
+      var id = String(payload); if(id !== me){ peers[id] = now(); drawPeers(); }
+      return;
+    }
+    try{
+      var data = JSON.parse(await open_(payload));
+      if(data && data.items) mergeState(data);
+    }catch(e){}
+  });
+}
+function ping(){ if(client && client.connected) client.publish(TOPIC+"/p", me, {qos:0}); }
+setInterval(ping, 8000);
+setInterval(function(){
+  var cut = now() - 26000, ch = false;
+  for(var id in peers){ if(peers[id] < cut){ delete peers[id]; ch = true; } }
+  if(ch) drawPeers();
+}, 4000);
+function drawPeers(){ $("#peers").textContent = String(1 + Object.keys(peers).length); }
+
+/* ============ действия ============ */
+function addItem(raw){
+  raw = raw.trim(); if(!raw) return;
+  var name = raw, qty = 1, unit = "шт";
+  var m = raw.match(/^(.*[^\s\d.,-])[\s,]+(\d+(?:[.,]\d+)?)\s*(шт|кг|г|л|мл|уп)?\.?$/i);
+  if(m){ name = m[1].trim(); qty = num(m[2]); if(m[3]) unit = m[3].toLowerCase(); }
+  var id = rnd(10).toLowerCase(), t = now();
+  state.items[id] = { id:id, created:t, name:name, done:false, price:"", qty:qty, unit:unit, del:false,
+                      ts:{ name:t, done:t, price:t, qty:t, unit:t, del:t } };
+  save(); render(); queueSend();
+}
+function setField(id, f, v){
+  var it = state.items[id]; if(!it) return;
+  if(it[f] === v) return;
+  it[f] = v; stamp(it, f);
+  save(); queueSend(); render();
+}
+
+/* ============ отрисовка ============ */
+var rows = new Map(), listEl = $("#list");
+var UNITS = ["шт","кг","г","л","мл","уп"];
+function money(v){ var n = parseFloat(String(v).replace(",", ".")); return isFinite(n) ? n : 0; }
+function num(v){ var n = parseFloat(String(v).replace(",", ".")); return (isFinite(n) && n > 0) ? Math.round(n*1000)/1000 : 1; }
+function step(u){ return (u === "г" || u === "мл") ? 100 : (u === "кг" || u === "л") ? 0.5 : 1; }
+function bump(q, u, d){ var s = step(u); return Math.max(s, Math.round((num(q) + d*s)*1000)/1000); }
+function fmtQty(q){ q = num(q); return (q % 1 ? q.toFixed(3).replace(/0+$/,"") : String(q)).replace(".", ","); }
+function fmtMoney(n){ return n.toFixed(2).replace(".", ","); }
+function lineSum(it){ return money(it.price) * num(it.qty); }
+
+function makeRow(it){
+  var el = document.createElement("div"); el.className = "row";
+  el.innerHTML =
+    '<button class="tick" aria-label="Отметить как найденное"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg></button>' +
+    '<div class="body">' +
+      '<input class="name" enterkeyhint="done">' +
+      '<div class="meta">' +
+        '<button class="step" data-d="-1" aria-label="Меньше">−</button>' +
+        '<input class="qty" inputmode="decimal" aria-label="Количество">' +
+        '<button class="step" data-d="1" aria-label="Больше">+</button>' +
+        '<button class="unit" aria-label="Единица измерения">шт</button>' +
+      '</div>' +
+    '</div>' +
+    '<i class="leader"></i>' +
+    '<div class="money">' +
+      '<div class="pricewrap"><input class="price" inputmode="decimal" placeholder="—"><span class="cur"></span></div>' +
+      '<div class="linesum"></div>' +
+    '</div>' +
+    '<button class="del" aria-label="Удалить"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>';
+
+  var tick = el.querySelector(".tick"), name = el.querySelector(".name"),
+      price = el.querySelector(".price"), qty = el.querySelector(".qty"),
+      unit = el.querySelector(".unit"), del = el.querySelector(".del");
+
+  tick.onclick = function(){ setField(it.id, "done", !state.items[it.id].done); };
+
+  var nt, pt, qt;
+  name.oninput = function(){ clearTimeout(nt); var v = name.value;
+    nt = setTimeout(function(){ setField(it.id, "name", v); }, 400); };
+  name.onblur = function(){ clearTimeout(nt);
+    if(!name.value.trim()){ setField(it.id, "del", true); } else setField(it.id, "name", name.value); };
+
+  price.oninput = function(){ clearTimeout(pt); var v = price.value;
+    pt = setTimeout(function(){ setField(it.id, "price", v); }, 400); };
+  price.onblur = function(){ clearTimeout(pt); setField(it.id, "price", price.value); };
+
+  qty.oninput = function(){ clearTimeout(qt); var v = qty.value;
+    qt = setTimeout(function(){ setField(it.id, "qty", num(v)); }, 500); };
+  qty.onblur = function(){ clearTimeout(qt); setField(it.id, "qty", num(qty.value)); render(); };
+
+  [].forEach.call(el.querySelectorAll(".step"), function(b){
+    b.onclick = function(){
+      var cur = state.items[it.id];
+      setField(it.id, "qty", bump(cur.qty, cur.unit, +b.dataset.d));
+    };
+  });
+  unit.onclick = function(){
+    var cur = state.items[it.id], i = UNITS.indexOf(cur.unit);
+    setField(it.id, "unit", UNITS[(i + 1) % UNITS.length]);
+  };
+
+  del.onclick = function(){ setField(it.id, "del", true); };
+  return { el:el, tick:tick, name:name, price:price, qty:qty, unit:unit,
+           cur:el.querySelector(".cur"), linesum:el.querySelector(".linesum") };
+}
+function updateRow(r, it){
+  r.el.classList.toggle("done", !!it.done);
+  if(document.activeElement !== r.name  && r.name.value  !== it.name)          r.name.value  = it.name;
+  if(document.activeElement !== r.price && r.price.value !== (it.price||""))   r.price.value = it.price || "";
+  var q = fmtQty(it.qty);
+  if(document.activeElement !== r.qty   && r.qty.value   !== q)                r.qty.value   = q;
+  r.unit.textContent = it.unit || "шт";
+  r.cur.textContent = CUR;
+  var line = lineSum(it);
+  r.linesum.textContent = (it.qty !== 1 && money(it.price) > 0) ? fmtMoney(line) + " " + CUR : "";
+}
+function render(){
+  var list = [];
+  for(var id in state.items){ if(!state.items[id].del) list.push(state.items[id]); }
+  list.sort(function(a,b){ return (a.done?1:0) - (b.done?1:0) || (a.created - b.created); });
+
+  var seen = {};
+  list.forEach(function(it, i){
+    var r = rows.get(it.id);
+    if(!r){ r = makeRow(it); rows.set(it.id, r); }
+    updateRow(r, it); seen[it.id] = 1;
+    if(listEl.children[i] !== r.el) listEl.insertBefore(r.el, listEl.children[i] || null);
+  });
+  rows.forEach(function(r, id){ if(!seen[id]){ r.el.remove(); rows.delete(id); } });
+
+  var done = list.filter(function(i){ return i.done; });
+  var sum = done.reduce(function(s,i){ return s + lineSum(i); }, 0);
+  $("#sum").textContent = fmtMoney(sum);
+  $("#curSign").textContent = CUR;
+  $("#progress").textContent = done.length + " / " + list.length;
+  $("#empty").style.display = list.length ? "none" : "block";
+}
+
+/* ============ комната ============ */
+async function openRoom(code){
+  CODE = code.toUpperCase();
+  location.hash = CODE;
+  localStorage.setItem("sl:last", CODE);
+  $("#codeLabel").textContent = CODE.slice(0,4) + "-" + CODE.slice(4);
+  $("#codeBig").textContent = CODE.slice(0,4) + "-" + CODE.slice(4);
+  peers = {}; drawPeers();
+  rows.forEach(function(r){ r.el.remove(); }); rows.clear();
+  load(); render();
+  KEY = await deriveKey(CODE);
+  TOPIC = await topicFor(CODE);
+  connect();
+}
+function shareLink(){ return location.origin + location.pathname + "#" + CODE; }
+
+/* ============ запуск ============ */
+function boot(){
+  if(typeof mqtt === "undefined"){ setTimeout(boot, 400); return; }
+
+  $("#curInput").value = CUR;
+  $("#broker").value = BROKER;
+
+  $("#addBtn").onclick = function(){ addItem($("#newItem").value); $("#newItem").value=""; $("#newItem").focus(); };
+  $("#newItem").addEventListener("keydown", function(e){
+    if(e.key === "Enter"){ addItem($("#newItem").value); $("#newItem").value=""; }
+  });
+
+  $("#menu").onclick  = function(){ $("#sheet").classList.add("open"); };
+  $("#sheet").onclick = function(e){ if(e.target === $("#sheet")) $("#sheet").classList.remove("open"); };
+
+  async function doShare(){
+    var url = shareLink(), txt = "Общий список покупок, код " + CODE;
+    if(navigator.share){ try{ await navigator.share({ title:"Список покупок", text:txt, url:url }); return; }catch(e){ if(e.name==="AbortError") return; } }
+    try{ await navigator.clipboard.writeText(url); toast("Ссылка скопирована"); }
+    catch(e){ prompt("Скопируйте ссылку:", url); }
+  }
+  $("#share").onclick = doShare;
+  $("#shareBtn").onclick = doShare;
+  $("#copyBtn").onclick = async function(){
+    try{ await navigator.clipboard.writeText(CODE); toast("Код скопирован"); }
+    catch(e){ prompt("Код списка:", CODE); }
+  };
+  $("#joinBtn").onclick = function(){
+    var c = ($("#joinCode").value || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if(c.length < 4) { toast("Введите код полностью"); return; }
+    $("#joinCode").value = ""; $("#sheet").classList.remove("open");
+    openRoom(c); toast("Открыт список " + c);
+  };
+  $("#newBtn").onclick = function(){
+    $("#sheet").classList.remove("open"); openRoom(rnd(8)); toast("Новый список создан");
+  };
+  $("#curInput").oninput = function(){
+    CUR = $("#curInput").value || "€"; localStorage.setItem("sl:cur", CUR); render();
+  };
+  $("#broker").onchange = function(){
+    BROKER = $("#broker").value; localStorage.setItem("sl:broker", BROKER); connect(); toast("Сервер переключён");
+  };
+  $("#clearDone").onclick = function(){
+    for(var id in state.items){ if(state.items[id].done && !state.items[id].del) setField(id, "del", true); }
+    $("#sheet").classList.remove("open"); toast("Собранное убрано");
+  };
+  $("#clearAll").onclick = function(){
+    if(!confirm("Удалить все позиции у обоих участников?")) return;
+    for(var id in state.items){ if(!state.items[id].del) setField(id, "del", true); }
+    $("#sheet").classList.remove("open");
+  };
+
+  window.addEventListener("hashchange", function(){
+    var c = location.hash.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+    if(c && c !== CODE) openRoom(c);
+  });
+  document.addEventListener("visibilitychange", function(){
+    if(!document.hidden){ ping(); if(client && !client.connected){ try{ client.reconnect(); }catch(e){} } }
+  });
+
+  var code = location.hash.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+  if(!code) code = localStorage.getItem("sl:last") || rnd(8);
+  openRoom(code);
+}
+if(typeof mqtt !== "undefined") boot(); else window.addEventListener("load", function(){ if(typeof mqtt !== "undefined") boot(); });
+</script>
+</body>
+</html>
