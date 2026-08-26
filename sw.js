@@ -1,6 +1,6 @@
 /* Кэш приложения. Поменяйте номер версии, если загрузили новый index.html
    и хотите, чтобы телефоны гарантированно забрали свежую версию. */
-var CACHE = "spisok-v5";
+var CACHE = "spisok-v6";
 var ASSETS = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", function(e){

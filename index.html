@@ -74,14 +74,14 @@ main{flex:1;overflow-y:auto;overscroll-behavior:contain;padding:.2rem 0 .4rem}
 .name{flex:1;min-width:0;border:0;background:none;padding:.15rem 0;outline:none;font-size:1.05rem}
 .row.done .name{color:var(--muted);text-decoration:line-through;text-decoration-thickness:1px}
 .del{width:1.7rem;height:1.8rem;flex:none;display:grid;place-items:center;color:var(--dot)}
-.grip{width:2rem;height:2rem;flex:none;display:grid;place-items:center;color:var(--dot);
+.dragger{width:2rem;height:2rem;flex:none;display:grid;place-items:center;color:var(--dot);
   touch-action:none;background:none;border:0;box-shadow:none;overflow:hidden;
   -webkit-appearance:none;appearance:none}
-.grip .dots{width:.2rem;height:.2rem;border-radius:50%;background:currentColor;
+.dragger .dots{width:.2rem;height:.2rem;border-radius:50%;background:currentColor;
   margin:0 0 .36rem .18rem;
   box-shadow:.36rem 0 0 currentColor, 0 .36rem 0 currentColor, .36rem .36rem 0 currentColor,
              0 .72rem 0 currentColor, .36rem .72rem 0 currentColor}
-.grip:active{color:var(--muted)}
+.dragger:active{color:var(--muted)}
 .row.dragging{z-index:5;background:var(--card);border-radius:.7rem;transition:none;
   box-shadow:0 .35rem 1rem rgba(0,0,0,.16)}
 .row.dragging::before{border-color:transparent}
@@ -135,7 +135,7 @@ footer::before{
 .sheet .box{background:var(--card);width:100%;border-radius:1.1rem 1.1rem 0 0;
   padding:1.1rem 1rem calc(1.1rem + var(--safe-b));max-height:88vh;overflow-y:auto;animation:up .22s ease}
 @keyframes up{from{transform:translateY(1rem);opacity:.6}}
-.sheet .grip{width:2.2rem;height:.22rem;border-radius:.2rem;background:var(--line);margin:-.4rem auto .9rem}
+.sheet-grip{width:2.2rem;height:.22rem;border-radius:.2rem;background:var(--line);margin:-.4rem auto .9rem}
 .sheet h2{font-size:.92rem;margin:1.3rem 0 .4rem;font-weight:600}
 .sheet h2:first-of-type{margin-top:.4rem}
 .sheet p{color:var(--muted);font-size:.82rem;margin:.35rem 0;line-height:1.4}
@@ -200,7 +200,7 @@ footer::before{
 
 <div class="sheet" id="sheet">
   <div class="box">
-    <div class="grip"></div>
+    <div class="sheet-grip"></div>
     <button class="act solid" id="installBtn" style="display:none;margin:0 0 .4rem">Установить приложение</button>
     <h2>Код списка</h2>
     <p>Кто знает код — видит и меняет список. Кода нет ни у кого, кроме тех, кому вы его дали.</p>
@@ -234,6 +234,10 @@ footer::before{
     </div>
     <p>Бесплатные публичные серверы. Содержимое списка шифруется на телефоне — сервер видит только набор байтов.</p>
 
+    <h2>Приложение</h2>
+    <p>Версия <b id="ver"></b>. Если после загрузки новых файлов вид не меняется — телефон показываетстарую копию из памяти.</p>
+    <button class="act" id="refreshBtn">Обновить приложение</button>
+
     <h2>Уборка</h2>
     <button class="act" id="clearDone">Убрать собранные позиции</button>
     <button class="act warn" id="clearAll">Очистить весь список</button>
@@ -245,6 +249,7 @@ footer::before{
 <script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js" onerror="var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js';s.onload=boot;document.head.appendChild(s)"></script>
 <script>
 /* ============ утилиты ============ */
+var APP_VERSION = 6;
 var AL = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 function rnd(n){ var a = new Uint8Array(n); crypto.getRandomValues(a);
   return [].map.call(a, function(b){ return AL[b % AL.length]; }).join(""); }
@@ -468,7 +473,7 @@ function makeRow(it){
     '<div class="body">' +
       '<div class="top">' +
         '<input class="name" enterkeyhint="done">' +
-        '<button class="grip" aria-label="Перетащить"><i class="dots"></i></button>' +
+        '<button class="dragger" aria-label="Перетащить"><i class="dots"></i></button>' +
         '<button class="del" aria-label="Удалить"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>' +
       '</div>' +
       '<div class="meta">' +
@@ -515,7 +520,7 @@ function makeRow(it){
   };
 
   del.onclick = function(){ setField(it.id, "del", true); };
-  el.querySelector(".grip").addEventListener("pointerdown", function(e){ startDrag(it.id, e); });
+  el.querySelector(".dragger").addEventListener("pointerdown", function(e){ startDrag(it.id, e); });
   return { el:el, tick:tick, name:name, price:price, qty:qty, unit:unit,
            cur:el.querySelector(".cur"), linesum:el.querySelector(".linesum") };
 }
@@ -690,6 +695,21 @@ function shareLink(){ return location.origin + location.pathname + "#" + CODE; }
 /* ============ запуск ============ */
 function boot(){
   if(typeof mqtt === "undefined"){ setTimeout(boot, 400); return; }
+
+  $("#ver").textContent = APP_VERSION;
+  $("#refreshBtn").onclick = async function(){
+    try{
+      if("serviceWorker" in navigator){
+        var regs = await navigator.serviceWorker.getRegistrations();
+        for(var i = 0; i < regs.length; i++) await regs[i].unregister();
+      }
+      if(window.caches){
+        var keys = await caches.keys();
+        for(var j = 0; j < keys.length; j++) await caches.delete(keys[j]);
+      }
+    }catch(e){}
+    location.reload();
+  };
 
   $("#curInput").value = CUR;
   $("#broker").value = BROKER;
