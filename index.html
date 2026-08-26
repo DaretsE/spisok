@@ -215,6 +215,9 @@ footer::before{
     </div>
     <button class="act" id="newBtn">Создать новый список</button>
 
+    <h2>Добавление списком</h2>
+    <p>В поле внизу можно вставить сразу весь список — с переносами строк, через запятую или точку с запятой, хоть с маркерами «—» и «1.». Каждая строка станет отдельной позицией. Дробное количество вроде «сыр 0,5 кг» при этом не разрывается.</p>
+
     <h2>Как считается сумма</h2>
     <p>Цена вводится за одну единицу — за штуку, за килограмм, за литр. В итог идёт цена × количество по всем отмеченным позициям.</p>
 
@@ -249,7 +252,7 @@ footer::before{
 <script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js" onerror="var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js';s.onload=boot;document.head.appendChild(s)"></script>
 <script>
 /* ============ утилиты ============ */
-var APP_VERSION = 6;
+var APP_VERSION = 7;
 var AL = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 function rnd(n){ var a = new Uint8Array(n); crypto.getRandomValues(a);
   return [].map.call(a, function(b){ return AL[b % AL.length]; }).join(""); }
@@ -402,8 +405,8 @@ setInterval(function(){
 function drawPeers(){ $("#peers").textContent = String(1 + Object.keys(peers).length); }
 
 /* ============ действия ============ */
-function addItem(raw){
-  raw = raw.trim(); if(!raw) return;
+function addItem(raw, quiet){
+  raw = String(raw).trim(); if(!raw) return null;
   var name = raw, qty = 1, unit = "шт";
   var m = raw.match(/^(.*[^\s\d.,-])[\s,]+(\d+(?:[.,]\d+)?)\s*(шт|кг|г|л|мл|уп)?\.?$/i);
   if(m){ name = m[1].trim(); qty = num(m[2]); if(m[3]) unit = m[3].toLowerCase(); }
@@ -411,7 +414,37 @@ function addItem(raw){
   state.items[id] = { id:id, created:t, name:name, done:false, price:"", qty:qty, unit:unit,
                       ord:lastOrd() + 1000, del:false,
                       ts:{ name:t, done:t, price:t, qty:t, unit:t, ord:t, del:t } };
-  save(); render(); queueSend(); reveal(id);
+  if(!quiet){ save(); render(); queueSend(); reveal(id); }
+  return id;
+}
+
+/* Разбор списка, вставленного целиком: строки, точки с запятой, запятые.
+   Запятая внутри числа («сыр 0,5 кг») разделителем не считается. */
+function splitItems(text){
+  var SAFE = "\u0001";
+  var t = String(text).replace(/(\d)\s*,\s*(\d)/g, "$1" + SAFE + "$2");
+  return t.split(/[\n\r;,•·|]+/)
+    .map(function(x){
+      return x.replace(new RegExp(SAFE, "g"), ",")
+              .replace(/^\s*(?:[-–—*·•]|\d+\s*[.)])\s+/, "")   /* маркеры «- », «1. », «2) » */
+              .replace(/\s+/g, " ")
+              .trim();
+    })
+    .filter(function(x){ return x.length > 0; });
+}
+function plural(n, one, few, many){
+  var a = n % 10, b = n % 100;
+  return (a === 1 && b !== 11) ? one : (a >= 2 && a <= 4 && (b < 12 || b > 14)) ? few : many;
+}
+function addItems(text){
+  var parts = splitItems(text);
+  if(!parts.length) return 0;
+  var last = null;
+  parts.forEach(function(x){ last = addItem(x, true) || last; });
+  save(); render(); queueSend();
+  if(last) reveal(last);
+  if(parts.length > 1) toast("Добавлено " + parts.length + " " + plural(parts.length, "позиция", "позиции", "позиций"));
+  return parts.length;
 }
 /* показать позицию: подвести к ней список и подсветить на секунду */
 function reveal(id){
@@ -693,8 +726,11 @@ async function openRoom(code){
 function shareLink(){ return location.origin + location.pathname + "#" + CODE; }
 
 /* ============ запуск ============ */
+var booted = false;
 function boot(){
   if(typeof mqtt === "undefined"){ setTimeout(boot, 400); return; }
+  if(booted) return;            /* защита от повторного запуска: обработчики навесились бы дважды */
+  booted = true;
 
   $("#ver").textContent = APP_VERSION;
   $("#refreshBtn").onclick = async function(){
@@ -714,9 +750,21 @@ function boot(){
   $("#curInput").value = CUR;
   $("#broker").value = BROKER;
 
-  $("#addBtn").onclick = function(){ addItem($("#newItem").value); $("#newItem").value=""; $("#newItem").focus(); };
+  $("#addBtn").onclick = function(){ addItems($("#newItem").value); $("#newItem").value=""; $("#newItem").focus(); };
   $("#newItem").addEventListener("keydown", function(e){
-    if(e.key === "Enter"){ addItem($("#newItem").value); $("#newItem").value=""; }
+    if(e.key === "Enter"){ addItems($("#newItem").value); $("#newItem").value=""; }
+  });
+  /* вставили список целиком — в input переносы строк теряются, поэтому берём текст из буфера сами */
+  $("#newItem").addEventListener("paste", function(e){
+    var txt = (e.clipboardData || window.clipboardData);
+    txt = txt ? txt.getData("text") : "";
+    if(!txt) return;
+    var parts = splitItems(txt);
+    if(parts.length < 2) return;                  /* одна позиция — обычная вставка */
+    e.preventDefault();
+    var pre = $("#newItem").value.trim();
+    $("#newItem").value = "";
+    addItems(pre ? pre + "\n" + txt : txt);
   });
 
   $("#menu").onclick  = function(){ $("#sheet").classList.add("open"); };
