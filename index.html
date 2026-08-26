@@ -74,8 +74,14 @@ main{flex:1;overflow-y:auto;overscroll-behavior:contain;padding:.2rem 0 .4rem}
 .name{flex:1;min-width:0;border:0;background:none;padding:.15rem 0;outline:none;font-size:1.05rem}
 .row.done .name{color:var(--muted);text-decoration:line-through;text-decoration-thickness:1px}
 .del{width:1.7rem;height:1.8rem;flex:none;display:grid;place-items:center;color:var(--dot)}
-.grip{width:1.7rem;height:1.9rem;flex:none;display:grid;place-items:center;color:var(--dot);touch-action:none}
-.grip svg{width:1.15rem;height:1.15rem;fill:currentColor}
+.grip{width:2rem;height:2rem;flex:none;display:grid;place-items:center;color:var(--dot);
+  touch-action:none;background:none;border:0;box-shadow:none;overflow:hidden;
+  -webkit-appearance:none;appearance:none}
+.grip .dots{width:.2rem;height:.2rem;border-radius:50%;background:currentColor;
+  margin:0 0 .36rem .18rem;
+  box-shadow:.36rem 0 0 currentColor, 0 .36rem 0 currentColor, .36rem .36rem 0 currentColor,
+             0 .72rem 0 currentColor, .36rem .72rem 0 currentColor}
+.grip:active{color:var(--muted)}
 .row.dragging{z-index:5;background:var(--card);border-radius:.7rem;transition:none;
   box-shadow:0 .35rem 1rem rgba(0,0,0,.16)}
 .row.dragging::before{border-color:transparent}
@@ -129,7 +135,7 @@ footer::before{
 .sheet .box{background:var(--card);width:100%;border-radius:1.1rem 1.1rem 0 0;
   padding:1.1rem 1rem calc(1.1rem + var(--safe-b));max-height:88vh;overflow-y:auto;animation:up .22s ease}
 @keyframes up{from{transform:translateY(1rem);opacity:.6}}
-.grip{width:2.2rem;height:.22rem;border-radius:.2rem;background:var(--line);margin:-.4rem auto .9rem}
+.sheet .grip{width:2.2rem;height:.22rem;border-radius:.2rem;background:var(--line);margin:-.4rem auto .9rem}
 .sheet h2{font-size:.92rem;margin:1.3rem 0 .4rem;font-weight:600}
 .sheet h2:first-of-type{margin-top:.4rem}
 .sheet p{color:var(--muted);font-size:.82rem;margin:.35rem 0;line-height:1.4}
@@ -462,10 +468,7 @@ function makeRow(it){
     '<div class="body">' +
       '<div class="top">' +
         '<input class="name" enterkeyhint="done">' +
-        '<button class="grip" aria-label="Перетащить"><svg viewBox="0 0 24 24">' +
-          '<circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/>' +
-          '<circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/>' +
-          '<circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></button>' +
+        '<button class="grip" aria-label="Перетащить"><i class="dots"></i></button>' +
         '<button class="del" aria-label="Удалить"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>' +
       '</div>' +
       '<div class="meta">' +
