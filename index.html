@@ -50,6 +50,12 @@ header{
 .pulse.bad{background:var(--alert)}
 @keyframes p{0%{box-shadow:0 0 0 0 rgba(28,122,74,.45)}70%{box-shadow:0 0 0 .45rem rgba(28,122,74,0)}100%{box-shadow:0 0 0 0 rgba(28,122,74,0)}}
 
+.banner{flex:none;max-height:0;overflow:hidden;background:var(--fresh);color:#fff;
+  transition:max-height .25s ease;font-size:.9rem}
+.banner.show{max-height:6rem}
+.banner span{display:block;padding:.7rem .8rem;line-height:1.35}
+.banner b{font-weight:600}
+
 /* ---------- список ---------- */
 main{flex:1;overflow-y:auto;overscroll-behavior:contain;padding:.2rem 0 .4rem}
 .row{display:flex;align-items:flex-start;gap:.55rem;padding:.6rem .7rem;position:relative;
@@ -174,6 +180,8 @@ footer::before{
   </button>
 </header>
 
+<div class="banner" id="banner"></div>
+
 <main id="main">
   <div id="list"></div>
   <div class="empty" id="empty">
@@ -237,6 +245,10 @@ footer::before{
     </div>
     <p>Бесплатные публичные серверы. Содержимое списка шифруется на телефоне — сервер видит только набор байтов.</p>
 
+    <h2>Уведомления</h2>
+    <p id="notifyState"></p>
+    <button class="act" id="notifyBtn">Включить уведомления</button>
+
     <h2>Приложение</h2>
     <p>Версия <b id="ver"></b>. Если после загрузки новых файлов вид не меняется — телефон показываетстарую копию из памяти.</p>
     <button class="act" id="refreshBtn">Обновить приложение</button>
@@ -252,7 +264,7 @@ footer::before{
 <script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js" onerror="var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js';s.onload=boot;document.head.appendChild(s)"></script>
 <script>
 /* ============ утилиты ============ */
-var APP_VERSION = 7;
+var APP_VERSION = 8;
 var AL = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 function rnd(n){ var a = new Uint8Array(n); crypto.getRandomValues(a);
   return [].map.call(a, function(b){ return AL[b % AL.length]; }).join(""); }
@@ -307,7 +319,7 @@ function ser(it){                                   /* канонический 
                          t.name||0, t.done||0, t.price||0, t.qty||0, t.unit||0, t.ord||0, t.del||0]);
 }
 function mergeState(incoming){
-  var changed = false, weHaveMore = false;
+  var changed = false, weHaveMore = false, added = [], back = [], first = !ready;
   for(var id in incoming.items){
     var inc = incoming.items[id];
     if(!inc || typeof inc !== "object") continue;
@@ -316,13 +328,15 @@ function mergeState(incoming){
     var mine = state.items[id], m = mergeItem(mine, inc);
     if(ser(m) !== ser(mine)){
       if(mine && !mine.done && m.done && !m.del) holdInPlace(id);
-      if(mine && mine.done && !m.done) releaseHold(id);
+      if(mine && mine.done && !m.done){ releaseHold(id); if(!m.del) back.push(m.name); }
+      if(!mine && !m.del) added.push(m.name);
       state.items[id] = m; changed = true;
     }
     if(ser(m) !== ser(inc)) weHaveMore = true;
   }
   for(var id2 in state.items){ if(!incoming.items[id2]) weHaveMore = true; }
   if(changed){ save(); render(); }
+  if(!first && (added.length || back.length)) announce(added, back);
   if(weHaveMore) queueSend();
   return changed;
 }
@@ -378,6 +392,7 @@ function connect(){
   client.on("connect", function(){
     setPulse("on");
     client.subscribe([TOPIC+"/s", TOPIC+"/p"], {qos:0});
+    ready = false; setTimeout(function(){ ready = true; }, 2500);
     setTimeout(function(){ if(Object.keys(state.items).length) send(); }, 800);
     ping();
   });
@@ -403,6 +418,47 @@ setInterval(function(){
   if(ch) drawPeers();
 }, 4000);
 function drawPeers(){ $("#peers").textContent = String(1 + Object.keys(peers).length); }
+
+/* ============ уведомления об изменениях от второго человека ============ */
+var bannerT;
+function banner(text){
+  var b = $("#banner");
+  b.innerHTML = "<span>" + text + "</span>";
+  b.classList.add("show");
+  clearTimeout(bannerT);
+  bannerT = setTimeout(function(){ b.classList.remove("show"); }, 7000);
+  b.onclick = function(){ b.classList.remove("show"); };
+}
+function notify(title, body){
+  try{ if(navigator.vibrate) navigator.vibrate([40, 80, 40]); }catch(e){}
+  try{
+    if(!("Notification" in window) || Notification.permission !== "granted") return;
+    var opts = { body:body, tag:"spisok", renotify:true, icon:"./icon-192.png",
+                 badge:"./icon-192.png", lang:"ru" };
+    if(navigator.serviceWorker && navigator.serviceWorker.ready){
+      navigator.serviceWorker.ready.then(function(reg){ reg.showNotification(title, opts); })
+        .catch(function(){ new Notification(title, opts); });
+    } else new Notification(title, opts);
+  }catch(e){}
+}
+function leftCount(){
+  var n = 0;
+  for(var id in state.items){ var it = state.items[id]; if(!it.del && !it.done) n++; }
+  return n;
+}
+function announce(added, back){
+  var parts = [];
+  if(added.length) parts.push(added.length === 1 ? "Добавлено: " + added[0]
+    : "Добавлено " + added.length + " " + plural(added.length, "позиция", "позиции", "позиций") + ": " + added.slice(0,3).join(", "));
+  if(back.length) parts.push(back.length === 1 ? "Снята отметка: " + back[0]
+    : "Снято отметок: " + back.length);
+  var left = leftCount();
+  var tail = left ? "Осталось собрать: " + left : "Всё собрано";
+  var title = added.length ? "В списке новая позиция" : "Список изменился";
+  if(document.hidden) notify(title, parts.join(" · ") + " · " + tail);
+  else { banner("<b>" + parts.join(" · ") + "</b><br>" + tail);
+         try{ if(navigator.vibrate) navigator.vibrate([40, 80, 40]); }catch(e){} }
+}
 
 /* ============ действия ============ */
 function addItem(raw, quiet){
@@ -470,6 +526,7 @@ var rows = new Map(), listEl = $("#list");
 var hold = {};            /* позиции, которые отмечены, но ещё стоят на своём месте */
 var HOLD_MS = 2600;
 var basketOpen = localStorage.getItem("sl:basket") !== "0";
+var ready = false;   /* после первого обмена с сервером становится true */
 
 /* Отмеченная позиция не прыгает сразу: держим её на месте, подсвечиваем,
    и только потом она уезжает вниз — глаз успевает связать нажатие с результатом. */
@@ -716,7 +773,7 @@ async function openRoom(code){
   localStorage.setItem("sl:last", CODE);
   $("#codeLabel").textContent = CODE.slice(0,4) + "-" + CODE.slice(4);
   $("#codeBig").textContent = CODE.slice(0,4) + "-" + CODE.slice(4);
-  peers = {}; drawPeers();
+  peers = {}; ready = false; drawPeers();
   rows.forEach(function(r){ r.el.remove(); }); rows.clear();
   load(); render();
   KEY = await deriveKey(CODE);
@@ -733,6 +790,25 @@ function boot(){
   booted = true;
 
   $("#ver").textContent = APP_VERSION;
+
+  function drawNotify(){
+    var el = $("#notifyState"), btn = $("#notifyBtn");
+    if(!("Notification" in window)){ el.textContent = "Этот браузер не умеет показывать уведомления."; btn.style.display = "none"; return; }
+    if(Notification.permission === "granted"){
+      el.textContent = "Включены. Когда второй человек добавит позицию или снимет отметку, телефон покажет уведомление — если приложение открыто или недавно свёрнуто.";
+      btn.style.display = "none";
+    } else if(Notification.permission === "denied"){
+      el.textContent = "Запрещены в настройках браузера. Разрешить можно там же: настройки сайта → Уведомления.";
+      btn.style.display = "none";
+    } else {
+      el.textContent = "Пока выключены. Изменения от второго человека всё равно видны прямо в списке.";
+      btn.style.display = "block";
+    }
+  }
+  drawNotify();
+  $("#notifyBtn").onclick = function(){
+    try{ Notification.requestPermission().then(drawNotify); }catch(e){ drawNotify(); }
+  };
   $("#refreshBtn").onclick = async function(){
     try{
       if("serviceWorker" in navigator){

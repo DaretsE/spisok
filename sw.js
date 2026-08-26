@@ -1,6 +1,6 @@
 /* Кэш приложения. Поменяйте номер версии, если загрузили новый index.html
    и хотите, чтобы телефоны гарантированно забрали свежую версию. */
-var CACHE = "spisok-v7";
+var CACHE = "spisok-v8";
 var ASSETS = ["./", "./index.html", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png"];
 
 self.addEventListener("install", function(e){
@@ -44,4 +44,15 @@ self.addEventListener("fetch", function(e){
       });
     })
   );
+});
+
+/* нажатие на уведомление возвращает в приложение */
+self.addEventListener("notificationclick", function(e){
+  e.notification.close();
+  e.waitUntil(clients.matchAll({ type:"window", includeUncontrolled:true }).then(function(list){
+    for(var i = 0; i < list.length; i++){
+      if(list[i].url.indexOf(self.registration.scope) === 0 && "focus" in list[i]) return list[i].focus();
+    }
+    if(clients.openWindow) return clients.openWindow("./");
+  }));
 });
