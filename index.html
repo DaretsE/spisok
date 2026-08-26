@@ -7,6 +7,10 @@
 <meta name="color-scheme" content="light only">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./icon-192.png">
+<link rel="apple-touch-icon" href="./icon-192.png">
+<meta name="apple-mobile-web-app-title" content="Список">
 <title>Список — общие покупки</title>
 <style>
 :root{
@@ -175,6 +179,7 @@ footer::before{
 <div class="sheet" id="sheet">
   <div class="box">
     <div class="grip"></div>
+    <button class="act solid" id="installBtn" style="display:none;margin:0 0 .4rem">Установить приложение</button>
     <h2>Код списка</h2>
     <p>Кто знает код — видит и меняет список. Кода нет ни у кого, кроме тех, кому вы его дали.</p>
     <div class="code" id="codeBig">------</div>
@@ -558,6 +563,21 @@ function boot(){
   document.addEventListener("visibilitychange", function(){
     if(!document.hidden){ ping(); if(client && !client.connected){ try{ client.reconnect(); }catch(e){} } }
   });
+
+  if("serviceWorker" in navigator){
+    navigator.serviceWorker.register("./sw.js").catch(function(){});
+  }
+
+  var installEvent = null;
+  window.addEventListener("beforeinstallprompt", function(e){
+    e.preventDefault(); installEvent = e; $("#installBtn").style.display = "block";
+  });
+  $("#installBtn").onclick = function(){
+    if(!installEvent) return;
+    installEvent.prompt(); installEvent = null;
+    $("#installBtn").style.display = "none"; $("#sheet").classList.remove("open");
+  };
+  window.addEventListener("appinstalled", function(){ $("#installBtn").style.display = "none"; });
 
   var code = location.hash.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
   if(!code) code = localStorage.getItem("sl:last") || rnd(8);
