@@ -52,9 +52,17 @@ header{
 
 /* ---------- список ---------- */
 main{flex:1;overflow-y:auto;overscroll-behavior:contain;padding:.2rem 0 .4rem}
-.row{display:flex;align-items:flex-start;gap:.55rem;padding:.6rem .7rem;position:relative}
+.row{display:flex;align-items:flex-start;gap:.55rem;padding:.6rem .7rem;position:relative;
+  transition:background .35s ease, opacity .22s ease, transform .22s ease}
+.row.held{background:var(--fresh-soft)}
+.row.held::before{border-color:transparent}
+.row.leaving{opacity:0;transform:translateX(1.2rem)}
 .row+.row::before{content:"";position:absolute;left:3.6rem;right:.7rem;top:0;border-top:1px solid var(--line)}
 .row.flash{animation:flash 1.5s ease-out}
+.sep{display:flex;width:100%;align-items:center;gap:.5rem;padding:1rem .7rem .35rem;text-align:left}
+.sep .line{flex:1;border-top:1px dashed var(--line)}
+.sep .chev{font-family:var(--mono);font-size:.7rem;color:var(--muted)}
+.sep .sepsum{font-family:var(--mono);font-size:.72rem;color:var(--muted)}
 @keyframes flash{0%{background:var(--fresh-soft)}60%{background:var(--fresh-soft)}100%{background:transparent}}
 .tick{width:2rem;height:2rem;margin-top:.05rem;flex:none;border:2px solid var(--dot);border-radius:.6rem;display:grid;place-items:center}
 .tick svg{width:1.15rem;height:1.15rem;stroke:#fff;fill:none;stroke-width:2.8;stroke-linecap:round;stroke-linejoin:round;
@@ -285,7 +293,11 @@ function mergeState(incoming){
     if(!inc.ts) inc.ts = {};
     inc.id = id;
     var mine = state.items[id], m = mergeItem(mine, inc);
-    if(ser(m) !== ser(mine)){ state.items[id] = m; changed = true; }
+    if(ser(m) !== ser(mine)){
+      if(mine && !mine.done && m.done && !m.del) holdInPlace(id);
+      if(mine && mine.done && !m.done) releaseHold(id);
+      state.items[id] = m; changed = true;
+    }
     if(ser(m) !== ser(inc)) weHaveMore = true;
   }
   for(var id2 in state.items){ if(!incoming.items[id2]) weHaveMore = true; }
@@ -393,12 +405,38 @@ function reveal(id){
 function setField(id, f, v){
   var it = state.items[id]; if(!it) return;
   if(it[f] === v) return;
+  if(f === "done"){
+    if(v){ holdInPlace(id); try{ if(navigator.vibrate) navigator.vibrate(12); }catch(e){} }
+    else releaseHold(id);
+  }
   it[f] = v; stamp(it, f);
   save(); queueSend(); render();
 }
 
 /* ============ отрисовка ============ */
 var rows = new Map(), listEl = $("#list");
+var hold = {};            /* позиции, которые отмечены, но ещё стоят на своём месте */
+var HOLD_MS = 2600;
+var basketOpen = localStorage.getItem("sl:basket") !== "0";
+
+/* Отмеченная позиция не прыгает сразу: держим её на месте, подсвечиваем,
+   и только потом она уезжает вниз — глаз успевает связать нажатие с результатом. */
+function holdInPlace(id){
+  if(hold[id]) clearTimeout(hold[id]);
+  hold[id] = setTimeout(function(){
+    var r = rows.get(id);
+    if(!r){ delete hold[id]; render(); return; }
+    r.el.classList.add("leaving");
+    setTimeout(function(){
+      delete hold[id];
+      r.el.classList.remove("leaving");
+      render();
+    }, 240);
+  }, HOLD_MS);
+}
+function releaseHold(id){
+  if(hold[id]){ clearTimeout(hold[id]); delete hold[id]; }
+}
 var UNITS = ["шт","кг","г","л","уп","мл"];
 function money(v){ var n = parseFloat(String(v).replace(",", ".")); return isFinite(n) ? n : 0; }
 function num(v){ var n = parseFloat(String(v).replace(",", ".")); return (isFinite(n) && n > 0) ? Math.round(n*1000)/1000 : 1; }
@@ -476,22 +514,47 @@ function updateRow(r, it){
   var line = lineSum(it);
   r.linesum.textContent = (it.qty !== 1 && money(it.price) > 0) ? fmtMoney(line) : "";
 }
+/* заголовок секции найденного — чтобы было видно, куда уезжают позиции */
+var sepEl = document.createElement("button");
+sepEl.className = "sep";
+sepEl.innerHTML = '<span class="lbl"></span><span class="chev"></span><i class="line"></i><span class="sepsum"></span>';
+sepEl.onclick = function(){
+  basketOpen = !basketOpen;
+  localStorage.setItem("sl:basket", basketOpen ? "1" : "0");
+  render();
+};
+
 function render(){
   var list = [];
   for(var id in state.items){ if(!state.items[id].del) list.push(state.items[id]); }
-  list.sort(function(a,b){ return (a.done?1:0) - (b.done?1:0) || (a.created - b.created); });
+  /* позиция, которую сейчас «держим», сортируется как ненайденная — остаётся на своём месте */
+  var placed = function(it){ return (it.done && !hold[it.id]) ? 1 : 0; };
+  list.sort(function(a,b){ return placed(a) - placed(b) || (a.created - b.created); });
 
-  var seen = {};
-  list.forEach(function(it, i){
+  var order = [], sepShown = false;
+  list.forEach(function(it){
+    if(placed(it) && !sepShown){ order.push(sepEl); sepShown = true; }
+    if(placed(it) && !basketOpen) return;                /* корзина свёрнута — строки не показываем */
     var r = rows.get(it.id);
     if(!r){ r = makeRow(it); rows.set(it.id, r); }
-    updateRow(r, it); seen[it.id] = 1;
-    if(listEl.children[i] !== r.el) listEl.insertBefore(r.el, listEl.children[i] || null);
+    updateRow(r, it);
+    r.el.classList.toggle("held", !!hold[it.id]);
+    order.push(r.el);
   });
-  rows.forEach(function(r, id){ if(!seen[id]){ r.el.remove(); rows.delete(id); } });
+
+  var keep = new Set(order);
+  rows.forEach(function(r, id){ if(!keep.has(r.el)){ r.el.remove(); if(!state.items[id] || state.items[id].del) rows.delete(id); } });
+  if(!sepShown && sepEl.parentNode) sepEl.remove();
+  order.forEach(function(node, i){
+    if(listEl.children[i] !== node) listEl.insertBefore(node, listEl.children[i] || null);
+  });
+  while(listEl.children.length > order.length) listEl.removeChild(listEl.lastChild);
 
   var done = list.filter(function(i){ return i.done; });
   var sum = done.reduce(function(s,i){ return s + lineSum(i); }, 0);
+  sepEl.querySelector(".lbl").textContent = "В корзине · " + done.length;
+  sepEl.querySelector(".chev").textContent = basketOpen ? "\u25be" : "\u25b8";
+  sepEl.querySelector(".sepsum").textContent = fmtMoney(sum) + " " + CUR;
   $("#sum").textContent = fmtMoney(sum);
   $("#curSign").textContent = CUR;
   $("#progress").textContent = done.length + " / " + list.length;
