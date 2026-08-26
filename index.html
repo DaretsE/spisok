@@ -73,7 +73,13 @@ main{flex:1;overflow-y:auto;overscroll-behavior:contain;padding:.2rem 0 .4rem}
 .top{display:flex;align-items:center;gap:.3rem}
 .name{flex:1;min-width:0;border:0;background:none;padding:.15rem 0;outline:none;font-size:1.05rem}
 .row.done .name{color:var(--muted);text-decoration:line-through;text-decoration-thickness:1px}
-.del{width:1.8rem;height:1.8rem;flex:none;display:grid;place-items:center;color:var(--dot)}
+.del{width:1.7rem;height:1.8rem;flex:none;display:grid;place-items:center;color:var(--dot)}
+.grip{width:1.7rem;height:1.9rem;flex:none;display:grid;place-items:center;color:var(--dot);touch-action:none}
+.grip svg{width:1.15rem;height:1.15rem;fill:currentColor}
+.row.dragging{z-index:5;background:var(--card);border-radius:.7rem;transition:none;
+  box-shadow:0 .35rem 1rem rgba(0,0,0,.16)}
+.row.dragging::before{border-color:transparent}
+.row.shifted{transition:transform .16s ease}
 .del svg{width:1rem;height:1rem;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round}
 .meta{display:flex;align-items:center;gap:.15rem;margin-top:.4rem;min-width:0;overflow:hidden}
 .step{width:1.85rem;height:1.85rem;flex:none;border:1px solid var(--line);border-radius:.5rem;color:var(--muted);
@@ -166,7 +172,7 @@ footer::before{
   <div id="list"></div>
   <div class="empty" id="empty">
     <b>Список пуст</b>
-    Добавьте первую покупку внизу — можно сразу с количеством: «яйца 10» или «сыр 0,5 кг». Потом нажмите «Поделиться», и второй человек откроет тот же список.
+    Добавьте первую покупку внизу — можно сразу с количеством: «яйца 10» или «сыр 0,5 кг». Позиции переставляются перетаскиванием за точки справа. Потом нажмите «Поделиться», и второй человек откроет тот же список.
   </div>
 </main>
 
@@ -261,6 +267,7 @@ function load(){
     if(it.del && (it.ts.del||0) < cut){ delete state.items[id]; continue; }
     if(it.qty  == null){ it.qty  = 1;    it.ts.qty  = it.ts.qty  || 0; }   /* метка 0 — правка соседа победит */
     if(it.unit == null){ it.unit = "шт"; it.ts.unit = it.ts.unit || 0; }
+    if(it.ord  == null){ it.ord  = it.created || 0; it.ts.ord = it.ts.ord || 0; }
   }
 }
 
@@ -269,7 +276,7 @@ function stamp(it, f){ it.ts[f] = Math.max(now(), (it.ts[f]||0) + 1); }
 function mergeItem(a, b){
   if(!a) return b; if(!b) return a;
   var m = { id:a.id, created: Math.min(a.created||0, b.created||0), ts:{} };
-  ["name","done","price","qty","unit","del"].forEach(function(f){
+  ["name","done","price","qty","unit","ord","del"].forEach(function(f){
     var ta = (a.ts&&a.ts[f])||0, tb = (b.ts&&b.ts[f])||0, useB;
     if(tb !== ta) useB = tb > ta;
     else useB = String(b[f]) > String(a[f]);      /* при равных метках — детерминированный выбор */
@@ -282,8 +289,8 @@ function ser(it){                                   /* канонический 
   if(!it) return "";
   var t = it.ts || {};
   return JSON.stringify([it.id, it.created||0, it.name||"", !!it.done, String(it.price||""),
-                         Number(it.qty||1), String(it.unit||"шт"), !!it.del,
-                         t.name||0, t.done||0, t.price||0, t.qty||0, t.unit||0, t.del||0]);
+                         Number(it.qty||1), String(it.unit||"шт"), Number(it.ord||0), !!it.del,
+                         t.name||0, t.done||0, t.price||0, t.qty||0, t.unit||0, t.ord||0, t.del||0]);
 }
 function mergeState(incoming){
   var changed = false, weHaveMore = false;
@@ -390,8 +397,9 @@ function addItem(raw){
   var m = raw.match(/^(.*[^\s\d.,-])[\s,]+(\d+(?:[.,]\d+)?)\s*(шт|кг|г|л|мл|уп)?\.?$/i);
   if(m){ name = m[1].trim(); qty = num(m[2]); if(m[3]) unit = m[3].toLowerCase(); }
   var id = rnd(10).toLowerCase(), t = now();
-  state.items[id] = { id:id, created:t, name:name, done:false, price:"", qty:qty, unit:unit, del:false,
-                      ts:{ name:t, done:t, price:t, qty:t, unit:t, del:t } };
+  state.items[id] = { id:id, created:t, name:name, done:false, price:"", qty:qty, unit:unit,
+                      ord:lastOrd() + 1000, del:false,
+                      ts:{ name:t, done:t, price:t, qty:t, unit:t, ord:t, del:t } };
   save(); render(); queueSend(); reveal(id);
 }
 /* показать позицию: подвести к ней список и подсветить на секунду */
@@ -448,12 +456,16 @@ function fmtMoney(n){ var a = n.toFixed(2).split(".");
 function lineSum(it){ return money(it.price) * num(it.qty); }
 
 function makeRow(it){
-  var el = document.createElement("div"); el.className = "row";
+  var el = document.createElement("div"); el.className = "row"; el.dataset.id = it.id;
   el.innerHTML =
     '<button class="tick" aria-label="Отметить как найденное"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg></button>' +
     '<div class="body">' +
       '<div class="top">' +
         '<input class="name" enterkeyhint="done">' +
+        '<button class="grip" aria-label="Перетащить"><svg viewBox="0 0 24 24">' +
+          '<circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/>' +
+          '<circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/>' +
+          '<circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg></button>' +
         '<button class="del" aria-label="Удалить"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>' +
       '</div>' +
       '<div class="meta">' +
@@ -500,6 +512,7 @@ function makeRow(it){
   };
 
   del.onclick = function(){ setField(it.id, "del", true); };
+  el.querySelector(".grip").addEventListener("pointerdown", function(e){ startDrag(it.id, e); });
   return { el:el, tick:tick, name:name, price:price, qty:qty, unit:unit,
            cur:el.querySelector(".cur"), linesum:el.querySelector(".linesum") };
 }
@@ -514,6 +527,99 @@ function updateRow(r, it){
   var line = lineSum(it);
   r.linesum.textContent = (it.qty !== 1 && money(it.price) > 0) ? fmtMoney(line) : "";
 }
+/* ============ перетаскивание позиций ============ */
+var drag = null;
+
+function ordOf(it){ return (it && typeof it.ord === "number") ? it.ord : (it ? it.created : 0); }
+function lastOrd(){
+  var m = 0;
+  for(var id in state.items){ var it = state.items[id]; if(!it.del) m = Math.max(m, ordOf(it)); }
+  return m;
+}
+function dragRows(){                       /* строки выше разделителя — только ненайденные */
+  var out = [], kids = [].slice.call(listEl.children);
+  for(var i = 0; i < kids.length; i++){
+    if(kids[i] === sepEl) break;
+    if(kids[i].classList.contains("row")) out.push(kids[i]);
+  }
+  return out;
+}
+function startDrag(id, e){
+  var r = rows.get(id); if(!r || drag) return;
+  var els = dragRows(), from = els.indexOf(r.el);
+  if(from < 0 || els.length < 2) return;
+  e.preventDefault();
+  drag = { id:id, el:r.el, els:els, from:from, to:from, h:r.el.getBoundingClientRect().height,
+           y:e.clientY, y0:e.clientY, main:$("#main"), scroll0:$("#main").scrollTop, edge:0, raf:0 };
+  r.el.classList.add("dragging");
+  try{ if(navigator.vibrate) navigator.vibrate(8); }catch(err){}
+  try{ e.target.setPointerCapture(e.pointerId); }catch(err){}
+}
+function applyDrag(){
+  if(!drag) return;
+  var dy = (drag.y - drag.y0) + (drag.main.scrollTop - drag.scroll0);
+  drag.el.style.transform = "translateY(" + dy + "px)";
+  drag.to = Math.max(0, Math.min(drag.els.length - 1, drag.from + Math.round(dy / drag.h)));
+  drag.els.forEach(function(el, i){
+    if(el === drag.el) return;
+    var shift = 0;
+    if(drag.to > drag.from && i > drag.from && i <= drag.to) shift = -drag.h;
+    else if(drag.to < drag.from && i >= drag.to && i < drag.from) shift = drag.h;
+    el.classList.add("shifted");
+    el.style.transform = shift ? "translateY(" + shift + "px)" : "";
+  });
+}
+function edgeScroll(){                     /* у края экрана список подкручивается сам */
+  if(!drag){ return; }
+  if(drag.edge){
+    var before = drag.main.scrollTop;
+    drag.main.scrollTop += drag.edge;
+    if(drag.main.scrollTop !== before) applyDrag();
+    drag.raf = requestAnimationFrame(edgeScroll);
+  } else drag.raf = 0;
+}
+document.addEventListener("pointermove", function(e){
+  if(!drag) return;
+  e.preventDefault();
+  drag.y = e.clientY;
+  applyDrag();
+  var box = drag.main.getBoundingClientRect();
+  drag.edge = (e.clientY < box.top + 60) ? -9 : (e.clientY > box.bottom - 60) ? 9 : 0;
+  if(drag.edge && !drag.raf) drag.raf = requestAnimationFrame(edgeScroll);
+}, { passive:false });
+
+function endDrag(){
+  if(!drag) return;
+  var d = drag; drag = null;
+  if(d.raf) cancelAnimationFrame(d.raf);
+  d.els.forEach(function(el){ el.classList.remove("shifted", "dragging"); el.style.transform = ""; });
+  if(d.to !== d.from) placeAt(d.id, d.els, d.from, d.to); else render();
+}
+document.addEventListener("pointerup", endDrag);
+document.addEventListener("pointercancel", endDrag);
+
+/* новый порядковый номер — среднее между соседями, чтобы не трогать остальные позиции */
+function placeAt(id, els, from, to){
+  var ids = els.map(function(el){ return el.dataset.id; });
+  ids.splice(to, 0, ids.splice(from, 1)[0]);
+  var pos = ids.indexOf(id);
+  var prev = pos > 0 ? state.items[ids[pos - 1]] : null;
+  var next = pos < ids.length - 1 ? state.items[ids[pos + 1]] : null;
+  var o;
+  if(prev && next){
+    o = (ordOf(prev) + ordOf(next)) / 2;
+    /* места между соседями не осталось — раздвигаем весь список и выходим */
+    if(!(o > ordOf(prev) && o < ordOf(next))){ renumber(ids); return; }
+  }
+  else if(prev) o = ordOf(prev) + 1000;
+  else if(next) o = ordOf(next) - 1000;
+  else          o = 1000;
+  setField(id, "ord", o);
+}
+function renumber(ids){                    /* места между соседями не осталось — раздвигаем весь список */
+  ids.forEach(function(x, i){ if(state.items[x]) setField(x, "ord", (i + 1) * 1000); });
+}
+
 /* заголовок секции найденного — чтобы было видно, куда уезжают позиции */
 var sepEl = document.createElement("button");
 sepEl.className = "sep";
@@ -525,11 +631,12 @@ sepEl.onclick = function(){
 };
 
 function render(){
+  if(drag) return;                         /* во время перетаскивания DOM не трогаем */
   var list = [];
   for(var id in state.items){ if(!state.items[id].del) list.push(state.items[id]); }
   /* позиция, которую сейчас «держим», сортируется как ненайденная — остаётся на своём месте */
   var placed = function(it){ return (it.done && !hold[it.id]) ? 1 : 0; };
-  list.sort(function(a,b){ return placed(a) - placed(b) || (a.created - b.created); });
+  list.sort(function(a,b){ return placed(a) - placed(b) || (ordOf(a) - ordOf(b)) || (a.created - b.created); });
 
   var order = [], sepShown = false;
   list.forEach(function(it){
