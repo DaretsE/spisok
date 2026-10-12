@@ -248,6 +248,10 @@ footer::before{
     <h2>Уведомления</h2>
     <p id="notifyState"></p>
     <button class="act" id="notifyBtn">Включить уведомления</button>
+    <button class="act" id="testBtn">Проверить уведомление</button>
+    <p>Приходят только об изменениях <b>второго человека</b>: он добавил позицию или снял отметку. Ваши собственные действия уведомлений не вызывают — проверять в одиночку бесполезно.</p>
+    <div id="diag" style="font-family:var(--mono);font-size:.68rem;color:var(--muted);line-height:1.6;
+         border:1px dashed var(--line);border-radius:.6rem;padding:.6rem;margin-top:.5rem;white-space:pre-line"></div>
 
     <h2>Приложение</h2>
     <p>Версия <b id="ver"></b>. Если после загрузки новых файлов вид не меняется — телефон показываетстарую копию из памяти.</p>
@@ -264,7 +268,7 @@ footer::before{
 <script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js" onerror="var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js';s.onload=boot;document.head.appendChild(s)"></script>
 <script>
 /* ============ утилиты ============ */
-var APP_VERSION = 8;
+var APP_VERSION = 9;
 var AL = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 function rnd(n){ var a = new Uint8Array(n); crypto.getRandomValues(a);
   return [].map.call(a, function(b){ return AL[b % AL.length]; }).join(""); }
@@ -429,17 +433,47 @@ function banner(text){
   bannerT = setTimeout(function(){ b.classList.remove("show"); }, 7000);
   b.onclick = function(){ b.classList.remove("show"); };
 }
+var missed = [];      /* изменения, пришедшие пока приложение было свёрнуто */
+var lastNotify = "ещё не отправлялось";
 function notify(title, body){
   try{ if(navigator.vibrate) navigator.vibrate([40, 80, 40]); }catch(e){}
-  try{
-    if(!("Notification" in window) || Notification.permission !== "granted") return;
-    var opts = { body:body, tag:"spisok", renotify:true, icon:"./icon-192.png",
-                 badge:"./icon-192.png", lang:"ru" };
-    if(navigator.serviceWorker && navigator.serviceWorker.ready){
-      navigator.serviceWorker.ready.then(function(reg){ reg.showNotification(title, opts); })
-        .catch(function(){ new Notification(title, opts); });
-    } else new Notification(title, opts);
-  }catch(e){}
+  if(!("Notification" in window)){ lastNotify = "браузер не умеет уведомления"; drawDiag(); return; }
+  if(Notification.permission !== "granted"){
+    lastNotify = "нет разрешения (" + Notification.permission + ")"; drawDiag(); return;
+  }
+  var opts = { body:body, tag:"spisok", renotify:true, icon:"./icon-192.png",
+               badge:"./icon-192.png", lang:"ru" };
+  /* В Chrome на Android new Notification() запрещён — показывать умеет только service worker.
+     Ждём его не дольше трёх секунд, иначе сообщаем об этом честно. */
+  if(!("serviceWorker" in navigator)){ lastNotify = "нет service worker"; drawDiag(); return; }
+  var late = setTimeout(function(){ lastNotify = "service worker не отвечает"; drawDiag(); }, 3000);
+  navigator.serviceWorker.ready
+    .then(function(reg){ return reg.showNotification(title, opts); })
+    .then(function(){ clearTimeout(late); lastNotify = "отправлено " + hhmm(); drawDiag(); })
+    .catch(function(err){
+      clearTimeout(late);
+      lastNotify = "ошибка: " + (err && err.message ? err.message : err);
+      drawDiag();
+    });
+}
+function hhmm(){
+  var d = new Date();
+  return ("0"+d.getHours()).slice(-2) + ":" + ("0"+d.getMinutes()).slice(-2) + ":" + ("0"+d.getSeconds()).slice(-2);
+}
+function drawDiag(){
+  var d = document.getElementById("diag"); if(!d) return;
+  var sw = ("serviceWorker" in navigator)
+    ? (navigator.serviceWorker.controller ? "активен" : "зарегистрирован, но не управляет страницей") : "нет";
+  var mode = (window.matchMedia && matchMedia("(display-mode: standalone)").matches)
+    ? "установлено как приложение" : "открыто во вкладке браузера";
+  d.textContent =
+    "версия: " + APP_VERSION + "\n" +
+    "разрешение: " + (("Notification" in window) ? Notification.permission : "не поддерживается") + "\n" +
+    "service worker: " + sw + "\n" +
+    "режим: " + mode + "\n" +
+    "связь со списком: " + ((client && client.connected) ? "есть" : "нет") + "\n" +
+    "устройств в списке: " + (1 + Object.keys(peers).length) + "\n" +
+    "последнее уведомление: " + lastNotify;
 }
 function leftCount(){
   var n = 0;
@@ -455,7 +489,7 @@ function announce(added, back){
   var left = leftCount();
   var tail = left ? "Осталось собрать: " + left : "Всё собрано";
   var title = added.length ? "В списке новая позиция" : "Список изменился";
-  if(document.hidden) notify(title, parts.join(" · ") + " · " + tail);
+  if(document.hidden){ missed.push(parts.join(" · ")); notify(title, parts.join(" · ") + " · " + tail); }
   else { banner("<b>" + parts.join(" · ") + "</b><br>" + tail);
          try{ if(navigator.vibrate) navigator.vibrate([40, 80, 40]); }catch(e){} }
 }
@@ -805,10 +839,30 @@ function boot(){
       btn.style.display = "block";
     }
   }
-  drawNotify();
+  drawNotify(); drawDiag();
   $("#notifyBtn").onclick = function(){
-    try{ Notification.requestPermission().then(drawNotify); }catch(e){ drawNotify(); }
+    try{ Notification.requestPermission().then(function(){ drawNotify(); drawDiag(); }); }
+    catch(e){ drawNotify(); drawDiag(); }
   };
+  $("#testBtn").onclick = function(){
+    var go = function(){
+      lastNotify = "отправляю…"; drawDiag(); drawNotify();
+      notify("Проверка", "Уведомления работают. Теперь сверните приложение и попросите второго человека добавить позицию.");
+    };
+    /* нет разрешения — сначала спросим, потом сразу покажем */
+    if(("Notification" in window) && Notification.permission === "default"){
+      try{ Notification.requestPermission().then(go); }catch(e){ go(); }
+    } else go();
+  };
+  $("#menu").addEventListener("click", function(){ drawNotify(); drawDiag(); });
+
+  /* вернулись в приложение — показываем, что пропустили */
+  document.addEventListener("visibilitychange", function(){
+    if(!document.hidden && missed.length){
+      banner("<b>Пока вас не было</b><br>" + missed.slice(-3).join("<br>"));
+      missed = [];
+    }
+  });
   $("#refreshBtn").onclick = async function(){
     try{
       if("serviceWorker" in navigator){
