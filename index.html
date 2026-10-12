@@ -268,7 +268,7 @@ footer::before{
 <script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js" onerror="var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js';s.onload=boot;document.head.appendChild(s)"></script>
 <script>
 /* ============ утилиты ============ */
-var APP_VERSION = 9;
+var APP_VERSION = 10;
 var AL = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 function rnd(n){ var a = new Uint8Array(n); crypto.getRandomValues(a);
   return [].map.call(a, function(b){ return AL[b % AL.length]; }).join(""); }
@@ -441,8 +441,9 @@ function notify(title, body){
   if(Notification.permission !== "granted"){
     lastNotify = "нет разрешения (" + Notification.permission + ")"; drawDiag(); return;
   }
-  var opts = { body:body, tag:"spisok", renotify:true, icon:"./icon-192.png",
-               badge:"./icon-192.png", lang:"ru" };
+  /* icon не задаём: Android и так рисует иконку приложения — вторая картинка была её дублем.
+     badge — отдельный значок для строки состояния, прозрачный, иначе выходит белый квадрат. */
+  var opts = { body:body, tag:"spisok", renotify:true, badge:"./badge.png", lang:"ru" };
   /* В Chrome на Android new Notification() запрещён — показывать умеет только service worker.
      Ждём его не дольше трёх секунд, иначе сообщаем об этом честно. */
   if(!("serviceWorker" in navigator)){ lastNotify = "нет service worker"; drawDiag(); return; }
